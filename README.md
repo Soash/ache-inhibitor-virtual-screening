@@ -9,7 +9,6 @@
 [![Data-ChEMBL](https://img.shields.io/badge/Data-ChEMBL%2037-00B4D8.svg)](https://www.ebi.ac.uk/chembl/)
 [![Screening-COCONUT](https://img.shields.io/badge/Screening-COCONUT%202.0-8338EC.svg)](https://coconut.naturalproducts.net/)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1KWGkLECTm0iWiJ0mTa6nEigNDNbDCKxS?usp=sharing)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
 
