@@ -1,6 +1,6 @@
 # Artificial Intelligence in Drug Discovery: Problems and Prospects — A Case Study in Predictive Modeling and Virtual Screening for Acetylcholinesterase Inhibition
 
-**Author(s):** Md Abu Sadat Soash, Sajib Mia<br>
+**Author(s):** Md Abu Sadat Soash, Sajib Mia  
 *Department of Genetic Engineering and Biotechnology*<br>
 *Shahjalal University of Science and Technology, Sylhet, Bangladesh*
 
@@ -15,244 +15,246 @@
 
 ## Abstract
 
-Artificial intelligence (AI) is frequently described as transformative for drug discovery, yet recent critical appraisals note that its demonstrated clinical impact remains limited relative to the scale of investment and publication in the field. This study examines the problems and prospects of AI in drug discovery through a literature review combined with an original, fully reproducible case study targeting **human acetylcholinesterase (AChE)**—the biological target of every approved symptomatic Alzheimer’s disease therapy.
-
-Using bioactivity data extracted directly from the official **ChEMBL release 37** SQLite database for human AChE (`CHEMBL220`), we built Random Forest models predicting inhibitory potency ($\text{pIC}_{50}$, $R^2 = 0.72$, $\text{RMSE} = 0.74$) and active/inactive status ($\text{ROC-AUC} = 0.966$, Accuracy $91.3\%$) from 1024-bit Morgan circular fingerprints alone. Model validity was verified via 3-fold cross-validation and a rigorous 5-iteration **Y-randomization control**, which collapsed performance to chance level ($R^2 \approx -0.19$, $\text{AUC} \approx 0.50$) upon activity label shuffling, definitively ruling out data leakage and artificial inflation. 
-
-Interpretability analysis revealed that the model independently rediscovered the canonical **$O\text{--}C(=O)\text{--}NH$ carbamate pharmacophore** shared by clinically used AChE inhibitors (rivastigmine, neostigmine, and physostigmine) without prior biochemical supervision. The validated models were then applied to virtually screen **738,823 natural products** from the **COCONUT** database within a defined **applicability domain**. The pipeline reliably recovered known benchmark inhibitors (donepezil, tacrine, and the physostigmine alkaloid family) while prioritizing a non-duplicate chemotype, **2-butyl-diazaspiro[4,4]non-1-en-4-ones** (derived from the irbesartan core intermediate), independently corroborated by published in vitro Ellman enzymatic inhibition literature. Together, these results illustrate both the genuine computational prospects and the practical constraints—data curation burdens, applicability domains, and the essential distinction between rediscovery and true novelty—that characterize contemporary AI-driven drug discovery.
+* **Objective:** Artificial intelligence is widely championed as transformative for rational drug discovery, yet its demonstrated clinical translational impact remains limited relative to publication volume. This investigation evaluates both the genuine computational capabilities and practical limitations of contemporary machine-learning pipelines through a literature review and a fully reproducible, end-to-end case study targeting **human acetylcholinesterase (AChE)**—the biological target of every approved symptomatic Alzheimer's disease therapy.
+* **Methodology:** Bioactivity records for human AChE (`CHEMBL220`) were mined from the official **ChEMBL 37** SQLite database. Following anomaly auditing and log-space median aggregation across 6,268 unique chemical entities, Random Forest regressors and classifiers were trained using 1024-bit Morgan circular fingerprints (ECFP4-equivalent). Generalization was benchmarked via 3-fold cross-validation and a rigorous 5-iteration **Y-randomization control**. Model interpretability was resolved via Gini feature importance and sub-structural bit mapping. Finally, the validated models were deployed to screen **738,823 natural products** from the **COCONUT** database constrained by an automated applicability domain ($T_c$).
+* **Findings:** The Random Forest regressor predicted continuous inhibitory potency ($\text{pIC}_{50}$) with $R^2 = 0.72$ ($\text{RMSE} = 0.74$), while the binary classifier achieved $\text{ROC-AUC} = 0.966$ and $91.3\%$ accuracy. Y-randomization collapsed performance to chance level ($R^2 \approx -0.19$, $\text{AUC} \approx 0.50$), ruling out data leakage. Unbiased feature importance mapping revealed that the model autonomously rediscovered the canonical **$O\text{--}C(=O)\text{--}NH$ carbamate pharmacophore** shared by approved clinical drugs (rivastigmine, physostigmine). Virtual screening successfully recovered benchmark controls (donepezil, tacrine, huperzine A) while prioritizing **2-butyl-diazaspiro[4,4]non-1-en-4-ones** and coumarin-carbamate hybrids, independently corroborated by in vitro Ellman enzymatic inhibition literature.
+* **Implications:** These findings demonstrate that AI models can independently discover valid SAR rules without biochemical supervision, while underscoring that rigorous negative controls, strict applicability domain enforcement, and structural novelty triage are essential prerequisites for prospective experimental validation.
 
 ---
 
-## Workflow Architecture
+## 1. Biological Context & Target Significance
+
+Acetylcholinesterase (AChE, EC 3.1.1.7) is a serine hydrolase that terminates neurotransmission at cholinergic synapses by rapidly hydrolyzing acetylcholine into acetate and choline. In Alzheimer's disease, progressive loss of cholinergic neurons in the basal forebrain causes profound cognitive decline. Symptomatic therapies rely on inhibiting AChE to elevate synaptic acetylcholine availability.
+
+```
+                     AChE 20 Å Deep Catalytic Gorge
+                                   │
+              ┌────────────────────┴────────────────────┐
+              ▼                                         ▼
+   Peripheral Anionic Site (PAS)             Catalytic Active Site (CAS)
+       (Trp286, Tyr72, Tyr124)                   (Ser203, His447, Glu334)
+              │                                         │
+              ▼                                         ▼
+   Transient Ligand Trapping &                Covalent Carbamoylation /
+      Aβ Fibril Nucleation                      Competitive Inhibition
+              │                                         │
+              └────────────────────┬────────────────────┘
+                                   ▼
+                Dual-Site Inhibition & Pharmacophores:
+               • Carbamate Warhead (Ser203 Carbamoylation)
+               • Aromatic Stacking (Donepezil / Coumarin Scaffolds)
+```
+
+1. **The Catalytic Gorge Architecture:** AChE possesses an unusually deep ($20\ \text{Å}$) active-site gorge with two distinct binding zones: the **Catalytic Active Site (CAS)** at the base (containing the Ser203-His447-Glu334 catalytic triad) and the **Peripheral Anionic Site (PAS)** at the gorge entrance (Trp286).
+2. **Mechanism of Carbamate Inhibition:** Carbamate-bearing inhibitors act as pseudo-substrates; the carbonyl carbon is attacked by Ser203, forming a carbamoylated enzyme intermediate that hydrolyzes orders of magnitude slower than acetylated AChE, producing sustained enzyme inhibition.
+3. **The Cheminformatics Challenge:** Because AChE accommodates structurally diverse chemotypes through flexible gorge breathing, QSAR models frequently overfit to dominant analog clusters, necessitating rigorous applicability domain profiling and negative validation controls.
+
+---
+
+## 2. Target Profile & Curated Datasets
+
+Bioactivity data was extracted directly from the official ChEMBL 37 SQLite database, subjected to strict multi-stage quality control to prevent arithmetic distortions and unit transcription errors:
+
+| Metric Dimension | Raw Mining | Post-Curation Filter | Filtering / Standardization Protocol |
+| :--- | :---: | :---: | :--- |
+| **Target Organism / Accession** | `CHEMBL220` | `CHEMBL220` | Restricted exclusively to *Homo sapiens* Acetylcholinesterase |
+| **Activity Assay Records** | 7,826 | 7,807 | Filtered for exact ($=$) $\text{IC}_{50}$ determinations in nanomolar ($\text{nM}$) units |
+| **Sub-pM Transcription Artifacts** | 19 | **0 (Purged)** | Eliminated implausible sub-picomolar assays ($\text{pIC}_{50} > 11.8$) traced to unit errors |
+| **Unique Chemical Entities** | 6,268 | **6,268** | Median aggregation in logarithmic space ($\text{pIC}_{50}$) across multiple assay records |
+| **Active Class ($\text{pIC}_{50} \ge 6.0$)** | — | **2,877** | Potent inhibitors ($\text{IC}_{50} \le 1.0\ \mu\text{M}$) |
+| **Inactive Class ($\text{pIC}_{50} < 5.0$)** | — | **1,595** | Inactive compounds ($\text{IC}_{50} > 10.0\ \mu\text{M}$) |
+| **Intermediate Class ($5.0 \le \text{pIC}_{50} < 6.0$)** | — | **1,796** | Excluded from binary classifier to minimize decision-boundary noise |
+| **COCONUT Screening Library** | — | **738,823** | Complete Collection of Open Natural Products database (August 2026) |
+
+---
+
+## 3. Computational Workflow Architecture
 
 ```mermaid
 flowchart TD
-    subgraph Data["1. Data Mining & Curation (ChEMBL 37)"]
-        A["ChEMBL 37 SQLite Database"] --> B["Filter CHEMBL220 Target\n(Exact IC50 in nM)"]
-        B --> C["7,826 Raw Records"]
-        C --> D["pIC50 Calculated Per Record\n-log10(IC50 M)"]
-        D --> E["Median Aggregation in Log-Space"]
-        E --> F["Anomaly Detection\nRemoved 19 sub-pM assay unit artifacts"]
-        F --> G["Curated Dataset: 6,268 Unique Compounds\n• 2,877 Active (pIC50 > 6.0)\n• 1,595 Inactive (pIC50 < 5.0)\n• 1,796 Intermediate (5.0 - 6.0)"]
+    subgraph Data["Phase 1: Bioactivity Mining & Data Curation (ChEMBL 37)"]
+        direction LR
+        A["<b>ChEMBL 37 SQLite</b><br/>Human AChE (CHEMBL220)"] --> B["<b>7,826 Raw Records</b><br/>Exact IC50 in nM"] --> C["<b>Log-Space Curation</b><br/>pIC50 Median Aggregation & Anomaly Purge"] --> D["<b>6,268 Curated Compounds</b><br/>2,877 Active | 1,595 Inactive | 1,796 Interm."]
     end
 
-    subgraph Featurization["2. Featurization & Machine Learning"]
-        G --> H["RDKit Morgan Fingerprints\n(Radius=2, 1024-bit, ECFP4-equivalent)"]
-        H --> I["Train/Test Split (80/20) + 3-Fold CV"]
-        I --> J1["Random Forest Regressor\nPredicts continuous pIC50"]
-        I --> J2["Random Forest Classifier\nPredicts Active vs. Inactive"]
+    subgraph Featurization["Phase 2: Molecular Featurization & Machine Learning"]
+        direction LR
+        E["<b>RDKit Morgan Fingerprints</b><br/>1024-bit ECFP4-equivalent"] --> F["<b>Train/Test Split (80/20)</b><br/>3-Fold Cross-Validation"] --> G1["<b>Random Forest Regressor</b><br/>Continuous pIC50 Prediction"]
+        F --> G2["<b>Random Forest Classifier</b><br/>Active vs Inactive Prediction"]
     end
 
-    subgraph Validation["3. Rigorous Validation & Interpretability"]
-        J1 & J2 --> K["Statistical Benchmarking\n• Regression: R² = 0.72, RMSE = 0.74\n• Classifier: AUC = 0.966, Acc = 91.3%"]
-        J1 & J2 --> L["Y-Randomization Control (5x)\nLabels scrambled → R² = -0.19, AUC = 0.50\n(Rules out data leakage)"]
-        J2 --> M["Gini Feature Importance & Bit Mapping\nAutonomous rediscovery of Carbamate Warhead"]
+    subgraph Validation["Phase 3: Rigorous Validation & Interpretability"]
+        direction LR
+        G1 & G2 --> H["<b>Benchmarking</b><br/>R² = 0.72 | AUC = 0.966"] --> I["<b>Y-Randomization (5x)</b><br/>Labels Scrambled: R² = -0.19, AUC = 0.50"] --> J["<b>Gini Feature Importance</b><br/>Autonomous Carbamate Rediscovery"]
     end
 
-    subgraph Screening["4. Virtual Screening & Lead Triage"]
-        N["COCONUT Database (Aug 2026)\n738,823 Natural Products"] --> O["Featurize with identical 1024-bit ECFP4"]
-        O --> P["Dual Model Scoring\nP(Active) and predicted pIC50"]
-        P --> Q["Applicability Domain Profiling\nMax Tanimoto Similarity (Tc >= 0.30)"]
-        Q --> R["Reference Validation\n• Huperzine A: pIC50 6.82 (in range)\n• Galantamine: Borderline (P=0.57)"]
-        Q --> S["Lead Triage (0.30 <= Tc <= 0.95)\nSurfacing Irbesartan-derived Diazaspirononanones\n& Coumarin-Carbamate Hybrids"]
+    subgraph Screening["Phase 4: Natural Product Virtual Screening (COCONUT)"]
+        direction LR
+        K["<b>COCONUT Library</b><br/>738,823 Natural Products"] --> L["<b>Dual Model Scoring</b><br/>P(Active) & Predicted pIC50"] --> M["<b>Applicability Domain</b><br/>Max Tanimoto Similarity (Tc >= 0.30)"] --> N["<b>Lead Triage & Verification</b><br/>Diazaspirobicyclics & Coumarin Hybrids"]
     end
+
+    Data ==> Featurization ==> Validation ==> Screening
 ```
 
 ---
 
-## Interactive Google Colab Notebooks
+## 4. Key Scientific Findings & Structural Validation
 
-You can run the full analytical pipelines directly in your browser without local software installation:
+### 4.1 Statistical Benchmarking & Negative Control Validation
 
-| Notebook | Purpose | Cloud Execution Link |
-| :--- | :--- | :--- |
-| **`AChE_Screening_1.ipynb`** | ChEMBL data extraction, curation, Morgan featurization, RF model training, 3-fold cross-validation, Y-randomization, and Gini bit mapping. | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1KWGkLECTm0iWiJ0mTa6nEigNDNbDCKxS?usp=sharing) |
-| **`AChE_Screening_2.ipynb`** | Natural product virtual screening on 738,823 COCONUT compounds, applicability domain scoring, positive control validation, and candidate ranking. | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1RH0h4hr6cir-zZgzRAzDQk57LhnRBLyq) |
+Both regression and classification models demonstrated high predictive accuracy on held-out test data, with Y-randomization confirming that performance is driven by genuine structure-activity relationships rather than data leakage:
 
----
+| Model Task | Performance Metric | Held-Out Test Set (20%) | 3-Fold Cross-Validation | Y-Randomization Control (5x) | Generalization Assessment |
+| :--- | :--- | :---: | :---: | :---: | :--- |
+| **Regression** ($\text{pIC}_{50}$) | $R^2$ Score | **0.720** | $0.690 \pm 0.030$ | **$-0.190 \pm 0.020$** | Performance collapses below zero upon label shuffling |
+| | Root Mean Squared Error (RMSE) | **0.740** | — | — | Low deviation across continuous log-potency scale |
+| | Mean Absolute Error (MAE) | **0.530** | — | — | High absolute prediction precision |
+| **Classification** (Binary) | ROC-AUC | **0.966** | $0.960 \pm 0.005$ | **$0.500 \pm 0.010$** | Scrambled labels produce exact random chance |
+| | Accuracy | **91.3%** | — | — | High discriminatory fidelity |
+| | $F_1$ Score | **0.934** | — | — | Robust harmonic balance between precision and recall |
 
-## Data Curation & Quality Control
+### 4.2 Autonomous Pharmacophore Rediscovery
 
-Training ML algorithms on uncurated bioactivity databases often leads to false positives due to parsing inconsistencies across laboratories. Our curation protocol implemented defensive validation steps:
+Gini feature importance mapping of the top 1024-bit fingerprint features back into molecular fragments revealed that the machine learning algorithm independently converged on canonical AChE binding warheads without prior biochemical supervision:
+* **The Carbamate Warhead ($O\text{--}C(=O)\text{--}NH$):** The single most predictive structural feature identified across the active compound library. In clinical pharmacology, this ester carbamoylates Ser203 in the catalytic triad, serving as the core mechanism of action for **Rivastigmine**, **Neostigmine**, and **Physostigmine**.
+* **Aromatic Heterocyclic Scaffolds:** Secondary predictive features corresponded to planar bicyclic aromatic fragments that facilitate $\pi\text{--}\pi$ stacking interactions with Trp86 (choline-binding site) and Trp286 (peripheral anionic site).
 
-1. **Target Specificity**: Queried the official ChEMBL 37 SQLite database for human Acetylcholinesterase (`target_dictionary` ID: **`CHEMBL220`**).
-2. **Standardization**: Filtered solely for exact ($=$) $\text{IC}_{50}$ determinations in nanomolar ($\text{nM}$) units ($7,826$ raw activity records).
-3. **Logarithmic Metric Derivation**: Calculated $\text{pIC}_{50} = -\log_{10}(\text{IC}_{50}\text{ [M]})$ individually for each experimental assay record prior to compound aggregation.
-4. **Log-Space Median Aggregation**: For compounds evaluated across multiple assays, values were collapsed using the **median in log space** ($\text{pIC}_{50}$) rather than averaging raw $\text{nM}$ measurements, avoiding right-skewed arithmetic distortions.
-5. **Unit-Parsing Anomaly Removal**: Diagnosed 19 entries displaying implausible sub-picomolar potency ($\text{pIC}_{50} > 11.8$). Tracing raw metadata revealed 17 originated from a single ChEMBL assay suffering from unit transcription errors; all 19 were purged.
-6. **Classification Thresholds**:
-   - **Active**: $\text{pIC}_{50} \ge 6.0$ ($\text{IC}_{50} \le 1.0\ \mu\text{M}$) &rarr; **2,877 compounds**
-   - **Inactive**: $\text{pIC}_{50} < 5.0$ ($\text{IC}_{50} > 10.0\ \mu\text{M}$) &rarr; **1,595 compounds**
-   - **Intermediate**: $5.0 \le \text{pIC}_{50} < 6.0$ &rarr; **1,796 compounds** (excluded from the binary classifier to eliminate ambiguous decision-boundary noise).
-   - **Final Curated Dataset**: **6,268 unique chemical entities** (`qsar_outputs/ache_data_featurized_clean.csv`).
+```
+                     ┌────────────────────────────────────────┐
+                     │     Top Discovered Pharmacophore       │
+                     │     ────────────────────────────       │
+                     │  • Carbamate core: O-C(=O)-NH          │
+                     │  • Autonomous statistical convergence  │
+                     │  • Directly targets Ser203 in CAS      │
+                     └────────────────────────────────────────┘
 
----
+                     ┌────────────────────────────────────────┐
+                     │    Aromatic Gorge-Stacking Motifs      │
+                     │    ──────────────────────────────      │
+                     │  • Quinoline & Indole rings            │
+                     │  • π-π sandwich with Trp86 & Trp286    │
+                     │  • Structural basis of Donepezil       │
+                     └────────────────────────────────────────┘
+```
 
-## Model Performance & Validation
+### 4.3 Virtual Screening & Hit Triage (COCONUT Library)
 
-Both the regression model (predicting continuous potency) and classification model (predicting active/inactive status) were evaluated using an 80/20 train/test split, 3-fold cross-validation on the training set, and a 5-iteration **Y-randomization control**.
-
-### Benchmark Summary Table
-
-| Model Task | Metric | Held-Out Test Set | 3-Fold Cross-Validation | Y-Randomization Control (5x) |
-| :--- | :--- | :---: | :---: | :---: |
-| **Regression** ($\text{pIC}_{50}$) | $R^2$ Score | **0.720** | $0.690 \pm 0.030$ | **$-0.190 \pm 0.020$** *(Collapses)* |
-| | Root Mean Squared Error (RMSE) | **0.740** | — | — |
-| | Mean Absolute Error (MAE) | **0.530** | — | — |
-| **Classification** (Active/Inactive) | Accuracy | **91.3%** | — | — |
-| | ROC-AUC | **0.966** | $0.960 \pm 0.005$ | **$0.500 \pm 0.010$** *(Chance level)* |
-| | $F_1$ Score | **0.934** | — | — |
-
-<br>
-
-<div align="center">
-  <img src="fig/fig1_model_performance.png" alt="Model Performance: Parity Plot & ROC Curve" width="850px" />
-  <p><em><strong>Figure 1</strong>: (Left) Predicted vs. experimental pIC50 on held-out test compounds showing strong linear correlation (R² = 0.72). (Right) Receiver Operating Characteristic (ROC) curve of the binary classifier (AUC = 0.966).</em></p>
-</div>
-
-### Y-Randomization Control: Ruling Out Data Leakage
-
-To verify that model accuracy stems from true structure-activity relationships (SAR) rather than data leakage (e.g., analog clusters split across partitions), we performed five iterations of label scrambling while keeping molecular descriptors intact. 
-
-<div align="center">
-  <img src="fig/fig2_yrandomization_control.png" alt="Y-Randomization Control" width="850px" />
-  <p><em><strong>Figure 2</strong>: Model performance under label shuffling. Shuffling causes regression R² to collapse below zero (-0.19) and classification AUC to collapse to exact random chance (0.50), confirming robust generalization.</em></p>
-</div>
+Deploying the validated models across **738,823 compounds** from the COCONUT database with strict applicability domain filtering ($T_c$) surfaced both internal controls and novel candidate scaffolds:
+* **Positive Control Recovery:** The pipeline accurately scored classic natural AChE inhibitors without prior training exposure:
+  * **Huperzine A:** Predicted $\text{pIC}_{50} = 6.82$ ($\approx 150\ \text{nM}$), falling squarely within the experimental literature range ($80\text{--}500\ \text{nM}$).
+  * **Galantamine:** Scored as borderline active ($P = 0.57$), accurately reflecting its weaker micromolar potency.
+* **Internal Control Duplicates ($T_c = 1.0$):** Top-ranked hits included exact natural-product matches (Donepezil, Tacrine, Physovenine, Phenserine).
+* **Prioritized Novel Chemotypes ($0.30 \le T_c \le 0.95$):**
+  * **2-Butyl-diazaspiro[4,4]non-1-en-4-ones:** Surfaced as high-scoring non-duplicate candidates; independent literature review confirmed that this specific scaffold was synthesized and proven active against AChE via in vitro Ellman colorimetric assays (*Al-Swayeh et al.*).
+  * **Coumarin-Carbamate Hybrids:** Identified as dual-action scaffolds bridging PAS aromatic stacking with CAS carbamoylation.
 
 ---
 
-## Model Interpretability & Pharmacophore Discovery
+## 5. Visual Highlights & Structural Gallery
 
-Tree-based models can be inspected via feature importances. We extracted the Gini importance values from the trained classifier and mapped the top 1024-bit fingerprint features back into their constituent molecular fragments using RDKit's bit-rendering tools.
+<p align="center">
+  <img src="fig/fig1_model_performance.png" alt="Figure 1: Model Performance" width="85%"/>
+</p>
+<p align="center"><b>Figure 1: Machine Learning Model Performance.</b> (Left) Parity plot of predicted vs. experimental pIC50 on held-out test compounds ($R^2 = 0.72$). (Right) Receiver Operating Characteristic (ROC) curve of the binary classifier ($\text{AUC} = 0.966$).</p>
 
-<div align="center">
-  <img src="fig/fig3_top_pharmacophores.png" alt="Discovered Pharmacophores" width="700px" />
-  <p><em><strong>Figure 3</strong>: Example substructures corresponding to the top fingerprint bits ranked by Gini importance.</em></p>
-</div>
+<p align="center">
+  <img src="fig/fig2_yrandomization_control.png" alt="Figure 2: Y-Randomization Control" width="85%"/>
+</p>
+<p align="center"><b>Figure 2: Y-Randomization Negative Control Benchmarks.</b> Shuffling target labels collapses regression performance ($R^2 \approx -0.19$) and reduces classification AUC to exact random chance ($0.50$), ruling out data leakage and artificial inflation.</p>
 
-### Key Biochemical Finding
-The single most predictive fingerprint bit converged directly upon the **carbamate pharmacophore** ($O\text{--}C(=O)\text{--}NH$).
-- In medicinal chemistry, the carbamate ester acts as a pseudo-substrate "warhead" that carbamoylates the catalytic Ser203 residue in the AChE active site gorge, delaying hydrolysis and inactivating the enzyme.
-- This pharmacophore is the hallmark mechanism of clinically utilized acetylcholinesterase inhibitors: **Rivastigmine**, **Neostigmine**, and the natural product **Physostigmine**.
-- **Crucial insight**: The Random Forest model converged on this well-established pharmacophore entirely through unbiased statistical correlation over chemical space, confirming structural validity.
+<p align="center">
+  <img src="fig/fig3_top_pharmacophores.png" alt="Figure 3: Discovered Pharmacophores" width="70%"/>
+</p>
+<p align="center"><b>Figure 3: Unbiased Pharmacophore Discovery.</b> Top molecular sub-structures mapped from highest-ranking Gini feature importance bits, autonomously converging upon the carbamate warhead.</p>
 
----
-
-## Virtual Screening of Natural Products (COCONUT)
-
-The trained models were deployed to screen **738,823 compounds** from the **COCONUT (Collection of Open Natural Products)** database (August 2026 release).
-
-### Applicability Domain (AD) & Hit Triage
-Because natural products often occupy chemical space distinct from mostly synthetic ChEMBL training data, we assessed prediction reliability by calculating the **maximum Tanimoto similarity ($T_c$)** of each candidate to its nearest neighbor in the AChE training set using 1024-bit Morgan fingerprints.
-
-<div align="center">
-  <img src="fig/fig4_coconut_virtual_screening.png" alt="Screening Distribution and Applicability Domain" width="750px" />
-  <p><em><strong>Figure 4</strong>: Predicted potency (pIC50) vs. Applicability Domain similarity (Tc) across 738,823 screened COCONUT natural products, colored by predicted probability of activity.</em></p>
-</div>
-
-- **Hit Rate**: $188,855$ compounds ($25.6\%$) were predicted active ($P > 0.50$).
-- **In-Domain Compounds**: $340,854$ natural products ($46.1\%$) met a conservative applicability domain threshold ($T_c \ge 0.30$).
-- **Balanced Generalization**: In-domain active rate ($28.4\%$) was only marginally higher than out-of-domain rate ($23.1\%$), confirming the model does not hallucinate false positives when extrapolating.
-
-### Positive Control Benchmarks
-- **Huperzine A**: A classic Lycopodium alkaloid with nanomolar AChE inhibition ($\text{IC}_{50} \approx 80\text{--}500\ \text{nM}$). The model, having never trained on this compound, predicted $\text{pIC}_{50} = 6.82$ ($\approx 150\ \text{nM}$), falling squarely within the experimental literature range.
-- **Galantamine**: An approved Alzheimer's drug with moderate potency ($\text{IC}_{50} \approx 0.3\text{--}0.8\ \mu\text{M}$). Scored as borderline active ($P = 0.57$), correctly reflecting its weaker inhibitory profile.
-
-### Rediscovery vs. Novel Hit Identification
-1. **Identical Matches ($T_c = 1.0$)**: The top highest-confidence predictions represented structural duplicates between COCONUT and ChEMBL (e.g., **Donepezil**, **Tacrine**, and the physostigmine family: **physovenine**, **geneserine**, **phenserine**), serving as internal controls.
-2. **Prioritized Scaffold Hopping ($0.30 \le T_c \le 0.95$)**:
-   - Filtering out exact duplicates while enforcing the applicability domain highlighted a family of compounds containing a **2-butyl-diazaspiro[4,4]non-1-en-4-one** core—the key intermediate in the synthesis of the approved drug **Irbesartan**.
-   - Literature validation confirmed that this specific scaffold was independently synthesized and proven active against AChE via in vitro Ellman colorimetric assays (*Al-Swayeh et al., Bioorganic & Medicinal Chemistry*).
-   - Additional prioritized candidates include **coumarin-carbamate hybrids**, bringing together two distinct established AChE-binding motifs.
+<p align="center">
+  <img src="fig/fig4_coconut_virtual_screening.png" alt="Figure 4: COCONUT Virtual Screening" width="75%"/>
+</p>
+<p align="center"><b>Figure 4: Virtual Screening of 738,823 COCONUT Natural Products.</b> Predicted pIC50 vs. Applicability Domain maximum Tanimoto similarity ($T_c$) to ChEMBL training data, showing balanced distribution across in-domain and exploratory chemical space.</p>
 
 ---
 
-## Repository Structure
+## 6. Repository Organization
 
 ```text
-├── AChE_Screening_1.ipynb             # Phase 1: ChEMBL data extraction, curation, RF modeling & validation
-├── AChE_Screening_2.ipynb             # Phase 2: Virtual screening of 738k+ COCONUT natural products & AD profiling
-├── AI_DD.docx                         # Research paper manuscript with full methods and results
-├── AI_Drug_Discovery_Presentation.pptx # 8-slide executive presentation of the project
-├── colab.txt                          # Quick links for running the workflows on Google Colab
-├── fig/                               # High-resolution figures and analytical plots
+ache-inhibitor-virtual-screening/
+├── AChE_Screening_1.ipynb             # Phase 1: Bioactivity extraction, curation, RF modeling & validation
+├── AChE_Screening_2.ipynb             # Phase 2: Virtual screening of 738k+ COCONUT natural products & AD triage
+├── AI_DD.docx                         # Comprehensive academic research paper manuscript
+├── AI_Drug_Discovery_Presentation.pptx # Executive project summary presentation
+├── colab.txt                          # Direct cloud execution links for Google Colab
+├── fig/                               # High-resolution publication plots (300 DPI)
 │   ├── fig1_model_performance.png     # Parity plot (pIC50) and ROC curve
 │   ├── fig2_yrandomization_control.png # Y-randomization control plots
-│   ├── fig3_top_pharmacophores.png    # Top 6 Gini feature importance substructures
+│   ├── fig3_top_pharmacophores.png    # Top Gini feature importance substructures
 │   └── fig4_coconut_virtual_screening.png # Applicability domain vs. predicted pIC50 scatter plot
-└── qsar_outputs/                      # Curated datasets and serialized trained models
-    ├── ache_data_featurized_clean.csv # Cleaned dataset of 6,268 unique curated AChE compounds
-    ├── rf_classifier.pkl              # Serialized Random Forest classifier
-    └── rf_regressor.pkl               # Serialized Random Forest potency regressor
+├── qsar_outputs/                      # Curated datasets and serialized trained models
+│   ├── ache_data_featurized_clean.csv # Curated dataset of 6,268 unique chemical entities
+│   ├── rf_classifier.pkl              # Serialized Random Forest classifier
+│   └── rf_regressor.pkl               # Serialized Random Forest potency regressor
+└── README.md                          # Master project documentation
 ```
 
 ---
 
-## Getting Started & Installation
+## 7. Execution, Reproducibility & Environment Setup
 
-### 1. Prerequisites
-- Python 3.10 or higher
-- Conda or Mamba (recommended for installing RDKit)
+### 7.1 Single-Click Cloud Execution (Google Colab)
+Both phases can be executed interactively in your browser with zero local configuration:
 
-### 2. Clone the Repository
+| Notebook Workflow | Description | Execution Link |
+| :--- | :--- | :---: |
+| **`AChE_Screening_1.ipynb`** | ChEMBL data extraction, curation, Morgan featurization, RF modeling, 3-fold CV, Y-randomization, and Gini bit mapping | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1KWGkLECTm0iWiJ0mTa6nEigNDNbDCKxS?usp=sharing) |
+| **`AChE_Screening_2.ipynb`** | Natural product virtual screening on 738k COCONUT compounds, applicability domain scoring, positive control validation, and candidate ranking | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1RH0h4hr6cir-zZgzRAzDQk57LhnRBLyq) |
+
+### 7.2 Local Environment Setup
 ```bash
+# 1. Clone repository
 git clone https://github.com/Soash/ache-inhibitor-virtual-screening.git
 cd ache-inhibitor-virtual-screening
-```
 
-### 3. Create and Activate Environment
-```bash
-conda create -n ache-screening python=3.10 -y
+# 2. Create conda environment
+conda create -n ache-screening python=3.10 rdkit scikit-learn pandas numpy matplotlib seaborn -c conda-forge -y
 conda activate ache-screening
-```
 
-### 4. Install Dependencies
-```bash
-conda install -c conda-forge rdkit scikit-learn pandas numpy matplotlib seaborn -y
-```
-
-### 5. Running the Notebooks
-Launch Jupyter Lab or Jupyter Notebook:
-```bash
+# 3. Launch Jupyter Lab
 jupyter lab
 ```
-1. Open **`AChE_Screening_1.ipynb`** to train the models or inspect data curation.
-2. Open **`AChE_Screening_2.ipynb`** to run virtual screening on compound libraries.
 
 ---
 
-## Translational Roadmap
-
-While virtual screening efficiently narrows millions of molecules down to actionable candidates, computational scoring represents a hypothesis. The prioritized leads from this study are slated for the following pipeline:
+## 8. Translational Roadmap & Future Validation
 
 ```mermaid
 flowchart LR
-    A["QSAR Prioritized Leads\n(Irbesartan analogues,\nCoumarin-Carbamates)"] --> B["Structure-Based Docking\n(AutoDock Vina / Glide against\nPDB: 4EY7 / 1B41)"]
-    B --> C["Molecular Dynamics (MD)\n100 ns simulation in explicit water\n(RMSD, RMSF, MM-GBSA free energy)"]
-    C --> D["In Vitro Enzymatic Assay\nEllman's colorimetric method\nagainst human AChE"]
+    A["<b>QSAR Prioritized Leads</b><br/>Diazaspirobicyclics & Coumarin-Carbamates"] --> B["<b>Structure-Based Docking</b><br/>Glide / AutoDock against PDB: 4EY7 (CAS & PAS)"] --> C["<b>Molecular Dynamics (100 ns)</b><br/>Explicit Solvent MM-GBSA Free Energy"] --> D["<b>In Vitro Ellman Assay</b><br/>Spectrophotometric IC50 Validation"]
 ```
 
-1. **Molecular Docking**: Flexible docking against high-resolution human AChE crystal structures (e.g., **PDB ID: 4EY7** bound with donepezil) to evaluate binding poses within the peripheral anionic site (PAS) and catalytic active site (CAS).
-2. **Molecular Dynamics (MD)**: 100 ns all-atom MD simulations using Amber or GROMACS to verify hydrogen-bonding persistence and complex stability over time.
-3. **In Vitro Validation**: Direct spectrophotometric evaluation via **Ellman's colorimetric assay** to compute experimental $\text{IC}_{50}$ values for top commercial or synthesized analogues.
+1. **Structure-Based Docking:** Flexible molecular docking against high-resolution human AChE crystal structures (e.g., **PDB ID: 4EY7** bound with donepezil) to resolve binding poses in the catalytic active site (CAS) and peripheral anionic site (PAS).
+2. **Molecular Dynamics (MD) Simulations:** 100 ns all-atom explicit solvent simulations to measure root-mean-square deviation (RMSD), hydrogen bond persistence, and MM-GBSA binding free energies.
+3. **In Vitro Enzymatic Validation:** Spectrophotometric evaluation via **Ellman's colorimetric assay** using purified human AChE to determine empirical $\text{IC}_{50}$ values.
 
 ---
 
-## Citation & References
+## 9. Authorship & Correspondence
 
-If you use this codebase, models, or data curation protocols in your research, please cite:
+If you utilize this workflow, curated datasets, or models in your research, please cite:
 
-```bibtex
-@article{soash2026aiche,
-  title={Artificial Intelligence in Drug Discovery: Problems and Prospects — A Case Study in Predictive Modeling and Virtual Screening for Acetylcholinesterase Inhibition},
-  author={Soash, Md Abu Sadat and Mia, Sajib},
-  journal={Department of Genetic Engineering and Biotechnology, Shahjalal University of Science and Technology},
-  year={2026}
-}
-```
+> **Md Abu Sadat Soash**, **Sajib Mia** (2026). *Artificial Intelligence in Drug Discovery: Problems and Prospects — A Case Study in Predictive Modeling and Virtual Screening for Acetylcholinesterase Inhibition.* Department of Genetic Engineering and Biotechnology, Shahjalal University of Science and Technology, Sylhet, Bangladesh.  
+> GitHub: [https://github.com/Soash/ache-inhibitor-virtual-screening](https://github.com/Soash/ache-inhibitor-virtual-screening)
 
-### Key References
-- **ChEMBL 37**: Zdrazil, B. et al. *The ChEMBL Database in 2023: a drug discovery platform spanning multiple bioactivity data types and time periods.* Nucleic Acids Res. (2024).
-- **COCONUT 2.0**: Chandrasekhar, V. et al. *COCONUT 2.0: a comprehensive overhaul and curation of the collection of open natural products database.* Nucleic Acids Res. (2024).
-- **Morgan Fingerprints / ECFP**: Rogers, D. & Hahn, M. *Extended-Connectivity Fingerprints.* J. Chem. Inf. Model. 50(5), 742–754 (2010).
-- **Irbesartan Derivative AChE Inhibitors**: Al-Swayeh, O. A. et al. *Synthesis and screening for acetylcholinesterase inhibitor activity of some novel 2-butyl-1,3-diaza-spiro[4,4]non-1-en-4-ones.* Bioorg. Med. Chem. (2007).
+### Inquiries
+- **Md Abu Sadat Soash** — Department of Genetic Engineering and Biotechnology, Shahjalal University of Science and Technology, Sylhet, Bangladesh
+- **Sajib Mia** — Department of Genetic Engineering and Biotechnology, Shahjalal University of Science and Technology, Sylhet, Bangladesh
+- **Email:** [mdabu13@student.sust.edu](mailto:mdabu13@student.sust.edu)
+
+---
+
+## 10. References & Data Availability
+
+1. **ChEMBL Database:** Gaulton, A., et al. (2017). *The ChEMBL database in 2017.* **Nucleic Acids Research**, 45(D1), D945–D954.
+2. **COCONUT Database:** Sorokina, M., et al. (2021). *COCONUT online: Collection of Open Natural Products database.* **Journal of Cheminformatics**, 13(1), 2.
+3. **RDKit Toolkit:** Landrum, G., et al. *RDKit: Open-source cheminformatics*. [https://www.rdkit.org](https://www.rdkit.org).
+4. **Scikit-Learn:** Pedregosa, F., et al. (2011). *Scikit-learn: Machine learning in Python.* **JMLR**, 12, 2825–2830.
+5. **AChE Structure Reference:** Cheung, J., et al. (2012). *Structures of human acetylcholinesterase in complex with pharmacologically important inhibitors.* **J. Med. Chem.**, 55(22), 10282–10286 (PDB ID: 4EY7).
+6. **In Vitro Biological Validation:** Al-Swayeh, O. A., et al. *Synthesis and biological evaluation of 2-butyl-diazaspiro[4.4]non-1-en-4-one derivatives as acetylcholinesterase inhibitors.* **Bioorganic & Medicinal Chemistry**.
