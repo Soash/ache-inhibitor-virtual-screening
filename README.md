@@ -13,7 +13,7 @@
 
 ---
 
-## 📄 Abstract
+## Abstract
 
 Artificial intelligence (AI) is frequently described as transformative for drug discovery, yet recent critical appraisals note that its demonstrated clinical impact remains limited relative to the scale of investment and publication in the field. This study examines the problems and prospects of AI in drug discovery through a literature review combined with an original, fully reproducible case study targeting **human acetylcholinesterase (AChE)**—the biological target of every approved symptomatic Alzheimer’s disease therapy.
 
@@ -23,7 +23,7 @@ Interpretability analysis revealed that the model independently rediscovered the
 
 ---
 
-## 🔄 Workflow Architecture
+## Workflow Architecture
 
 ```mermaid
 flowchart TD
@@ -60,7 +60,7 @@ flowchart TD
 
 ---
 
-## ⚡ Interactive Google Colab Notebooks
+## Interactive Google Colab Notebooks
 
 You can run the full analytical pipelines directly in your browser without local software installation:
 
@@ -71,7 +71,7 @@ You can run the full analytical pipelines directly in your browser without local
 
 ---
 
-## 🧹 Data Curation & Quality Control
+## Data Curation & Quality Control
 
 Training ML algorithms on uncurated bioactivity databases often leads to false positives due to parsing inconsistencies across laboratories. Our curation protocol implemented defensive validation steps:
 
@@ -88,7 +88,7 @@ Training ML algorithms on uncurated bioactivity databases often leads to false p
 
 ---
 
-## 📊 Model Performance & Validation
+## Model Performance & Validation
 
 Both the regression model (predicting continuous potency) and classification model (predicting active/inactive status) were evaluated using an 80/20 train/test split, 3-fold cross-validation on the training set, and a 5-iteration **Y-randomization control**.
 
@@ -121,7 +121,7 @@ To verify that model accuracy stems from true structure-activity relationships (
 
 ---
 
-## 🔍 Model Interpretability & Pharmacophore Discovery
+## Model Interpretability & Pharmacophore Discovery
 
 Tree-based models can be inspected via feature importances. We extracted the Gini importance values from the trained classifier and mapped the top 1024-bit fingerprint features back into their constituent molecular fragments using RDKit's bit-rendering tools.
 
@@ -138,7 +138,7 @@ The single most predictive fingerprint bit converged directly upon the **carbama
 
 ---
 
-## 🌿 Virtual Screening of Natural Products (COCONUT)
+## Virtual Screening of Natural Products (COCONUT)
 
 The trained models were deployed to screen **738,823 compounds** from the **COCONUT (Collection of Open Natural Products)** database (August 2026 release).
 
@@ -167,7 +167,7 @@ Because natural products often occupy chemical space distinct from mostly synthe
 
 ---
 
-## 📁 Repository Structure
+## Repository Structure
 
 ```text
 ├── AChE_Screening_1.ipynb             # Phase 1: ChEMBL data extraction, curation, RF modeling & validation
@@ -188,7 +188,7 @@ Because natural products often occupy chemical space distinct from mostly synthe
 
 ---
 
-## 🚀 Getting Started & Installation
+## Getting Started & Installation
 
 ### 1. Prerequisites
 - Python 3.10 or higher
@@ -221,7 +221,7 @@ jupyter lab
 
 ---
 
-## 🎯 Translational Roadmap
+## Translational Roadmap
 
 While virtual screening efficiently narrows millions of molecules down to actionable candidates, computational scoring represents a hypothesis. The prioritized leads from this study are slated for the following pipeline:
 
@@ -238,7 +238,7 @@ flowchart LR
 
 ---
 
-## 📜 Citation & References
+## Citation & References
 
 If you use this codebase, models, or data curation protocols in your research, please cite:
 
