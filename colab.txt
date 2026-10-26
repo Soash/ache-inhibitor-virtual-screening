@@ -1,0 +1,8 @@
+
+AChE_Screening_1.ipynb
+https://colab.research.google.com/drive/1KWGkLECTm0iWiJ0mTa6nEigNDNbDCKxS?usp=sharing
+
+
+AChE_Screening_2.ipynb
+https://drive.google.com/file/d/1RH0h4hr6cir-zZgzRAzDQk57LhnRBLyq/view?usp=sharing
+
